@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>Goals Countdown</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --card: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --text: #ffffff;
+      --muted: rgba(255,255,255,0.35);
+      --accent: #FF6B35;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #glow {
+      position: fixed; top: -40%; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, #FF6B3522 0%, transparent 70%);
+      pointer-events: none; z-index: 0; transition: background 0.6s ease;
+    }
+    .app {
+      position: relative; z-index: 1;
+      max-width: 480px; margin: 0 auto;
+      padding: 24px 16px 60px;
+    }
+    .header { text-align: center; margin-bottom: 28px; }
+    .header-sub { font-size: 10px; letter-spacing: 4px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; }
+    .header-title {
+      font-family: 'Bebas Neue', sans-serif; font-size: 38px; letter-spacing: 2px;
+      background: linear-gradient(135deg, #fff 40%, var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .tabs {
+      display: flex; gap: 6px; background: rgba(255,255,255,0.04);
+      border-radius: 12px; padding: 4px; margin-bottom: 20px;
+    }
+    .tab {
+      flex: 1; padding: 9px 0; background: transparent; border: none;
+      border-radius: 8px; cursor: pointer; color: var(--muted);
+      font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; transition: all 0.25s ease;
+    }
+    .tab.active { background: var(--accent); color: #000; }
+
+    /* Toast */
+    #toastContainer {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 999; width: 90%; max-width: 340px;
+    }
+    .toast {
+      background: rgba(18,18,28,0.97); border: 1px solid var(--accent);
+      border-radius: 16px; padding: 16px 20px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      animation: slideDown 0.4s ease;
+    }
+    .toast-title { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); letter-spacing: 1px; margin-bottom: 6px; }
+    .toast-body { font-size: 11px; color: var(--muted); line-height: 1.8; }
+    @keyframes slideDown { from { opacity:0; transform:translateY(-14px); } to { opacity:1; transform:translateY(0); } }
+
+    .countdown-card {
+      background: var(--card); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px; padding: 22px; margin-bottom: 14px;
+      position: relative; overflow: hidden;
+    }
+    .countdown-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+    .countdown-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .time-label { font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+    .time-value { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: var(--accent); letter-spacing: 1px; line-height: 1; }
+    .time-elapsed { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .ring-wrap { position: relative; width: 100px; height: 100px; flex-shrink: 0; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ring-pct { font-family: 'Bebas Neue', sans-serif; font-size: 24px; line-height: 1; }
+    .ring-sub { font-size: 8px; color: var(--muted); letter-spacing: 1px; }
+    .prog-bar-wrap { margin-top: 16px; }
+    .prog-bar-labels { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .prog-bar-labels span { font-size: 10px; color: var(--muted); }
+    .prog-bar-labels .pct { color: var(--accent); }
+    .prog-bar { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+    .prog-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s cubic-bezier(0.4,0,0.2,1); box-shadow: 0 0 8px var(--accent); }
+
+    .view-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+    .view-btn {
+      flex: 1; padding: 9px; background: transparent;
+      border: 1px solid var(--border); border-radius: 10px; cursor: pointer;
+      color: var(--muted); font-family: 'Space Mono', monospace;
+      font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; transition: all 0.2s;
+    }
+    .view-btn.active { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff; }
+
+    .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    .todo-input {
+      flex: 1; padding: 12px 14px; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      color: #fff; font-family: 'Space Mono', monospace; font-size: 13px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .todo-input:focus { border-color: var(--accent); }
+    .todo-input::placeholder { color: rgba(255,255,255,0.2); }
+    .add-btn {
+      padding: 12px 18px; background: var(--accent); border: none;
+      border-radius: 12px; cursor: pointer; color: #000;
+      font-size: 22px; font-weight: 900; line-height: 1; transition: opacity 0.2s;
+    }
+    .add-btn:active { opacity: 0.7; }
+
+    .todo-list { display: flex; flex-direction: column; gap: 8px; }
+    .todo-empty { text-align: center; padding: 36px; color: rgba(255,255,255,0.15); font-size: 11px; letter-spacing: 1px; line-height: 1.8; }
+    .todo-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; background: var(--card);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px; transition: all 0.25s ease;
+      animation: fadeIn 0.2s ease;
+    }
+    .todo-item.done { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.04); }
+    .check-btn {
+      width: 24px; height: 24px; flex-shrink: 0;
+      background: transparent; border: 2px solid rgba(255,255,255,0.25);
+      border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; color: #000; transition: all 0.2s;
+    }
+    .todo-item.done .check-btn { background: var(--accent); border-color: var(--accent); }
+    .todo-text { flex: 1; font-size: 13px; color: #fff; transition: all 0.2s; word-break: break-word; }
+    .todo-item.done .todo-text { color: rgba(255,255,255,0.3); text-decoration: line-through; }
+    .del-btn {
+      background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,0.2); font-size: 20px;
+      line-height: 1; padding: 2px 6px; transition: color 0.15s; flex-shrink: 0;
+    }
+    .del-btn:active { color: #ff4444; }
+
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 20px; }
+    .chart-title { font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 2px; }
+    .chart-subtitle { font-size: 9px; color: rgba(255,255,255,0.18); margin-bottom: 16px; }
+    .bar-chart { display: flex; align-items: flex-end; gap: 5px; height: 120px; padding: 0 2px; }
+    .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; }
+    .bar-pct { font-size: 8px; color: var(--accent); min-height: 12px; }
+    .bar-inner { position: relative; width: 100%; flex: 1; }
+    .bar-bg { position: absolute; bottom: 0; left: 0; right: 0; top: 0; background: rgba(255,255,255,0.07); border-radius: 4px 4px 0 0; }
+    .bar-fill { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 4px 4px 0 0; opacity: 0.9; transition: height 0.6s ease; }
+    .bar-label { font-size: 9px; color: rgba(255,255,255,0.3); white-space: nowrap; }
+    .bar-label.current { color: #fff; font-weight: 700; }
+
+    .chart-legend { display: flex; gap: 16px; justify-content: center; margin-top: 14px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 9px; color: rgba(255,255,255,0.4); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 16px; }
+    .stat-box { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; text-align: center; }
+    .stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--accent); line-height: 1; }
+    .stat-lbl { font-size: 8px; color: var(--muted); letter-spacing: 1px; margin-top: 3px; text-transform: uppercase; }
+
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  </style>
+</head>
+<body>
+<div id="glow"></div>
+<div id="toastContainer"></div>
+<div class="app">
+  <div class="header">
+    <div class="header-sub">Countdown</div>
+    <div class="header-title">Goals Tracker</div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+
+  <div class="countdown-card">
+    <div class="countdown-inner">
+      <div>
+        <div class="time-label">Time Remaining</div>
+        <div class="time-value" id="timeValue">—</div>
+        <div class="time-elapsed" id="timeElapsed">—</div>
+      </div>
+      <div class="ring-wrap">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
+          <circle id="ringCircle" cx="50" cy="50" r="42" fill="none" stroke-width="8"
+            stroke-dasharray="263.9" stroke-dashoffset="263.9" stroke-linecap="round"
+            style="stroke:var(--accent); transition:stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1)"/>
+        </svg>
+        <div class="ring-label">
+          <div class="ring-pct" id="ringPct">0%</div>
+          <div class="ring-sub">DONE</div>
+        </div>
+      </div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div class="prog-bar-labels">
+        <span id="taskCount">0 of 0 tasks</span>
+        <span class="pct" id="pctLabel">0%</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="view-toggle">
+    <button class="view-btn active" id="btnTasks" onclick="setView('tasks')">📋 Tasks</button>
+    <button class="view-btn" id="btnChart" onclick="setView('chart')">📊 Chart</button>
+  </div>
+
+  <div id="tasksView">
+    <div class="input-row">
+      <input class="todo-input" id="todoInput" placeholder="Add a goal…" />
+      <button class="add-btn" onclick="addTodo()">+</button>
+    </div>
+    <div class="todo-list" id="todoList"></div>
+  </div>
+
+  <div id="chartView" style="display:none">
+    <div class="chart-card">
+      <div class="chart-title" id="chartTitle">History</div>
+      <div class="chart-subtitle" id="chartSubtitle"></div>
+      <div class="bar-chart" id="barChart"></div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>% Completed</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,255,255,0.07)"></div>No data</div>
+      </div>
+      <div class="stats-grid" id="statsGrid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Period key: unique string per time window ──────────────────────────────
+function getPeriodKey(period) {
+  const now = new Date();
+  const y = now.getFullYear(), mo = now.getMonth(), d = now.getDate();
+  if (period === 'daily')   return `${y}-${mo+1}-${d}`;
+  if (period === 'monthly') return `${y}-${mo+1}`;
+  if (period === 'yearly')  return `${y}`;
+  // weekly: ISO week
+  const tmp = new Date(Date.UTC(y, mo, d));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const ys = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const wk = Math.ceil((((tmp - ys) / 86400000) + 1) / 7);
+  return `${y}-W${wk}`;
+}
+
+// ── Config ─────────────────────────────────────────────────────────────────
+const PERIODS = ['daily','weekly','monthly','yearly'];
+const CFG = {
+  daily:   { label:'Daily',   color:'#FF6B35', histLen:7  },
+  weekly:  { label:'Weekly',  color:'#4ECDC4', histLen:8  },
+  monthly: { label:'Monthly', color:'#A855F7', histLen:6  },
+  yearly:  { label:'Yearly',  color:'#F59E0B', histLen:5  },
+};
+
+// ── State ──────────────────────────────────────────────────────────────────
+let state = {
+  todos:      { daily:[], weekly:[], monthly:[], yearly:[] },
+  // history entries: { key, pct }  (pct = null if no tasks were added)
+  history:    { daily:[], weekly:[], monthly:[], yearly:[] },
+  periodKeys: { daily:'', weekly:'', monthly:'', yearly:'' },
+};
+
+let activePeriod = 'daily';
+let activeView   = 'tasks';
+
+// ── Storage ────────────────────────────────────────────────────────────────
+function load() {
+  try {
+    const raw = localStorage.getItem('goals_app_v3');
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p.todos)      state.todos      = p.todos;
+      if (p.history)    state.history    = p.history;
+      if (p.periodKeys) state.periodKeys = p.periodKeys;
+    }
+  } catch(e) {}
+}
+function save() {
+  try { localStorage.setItem('goals_app_v3', JSON.stringify(state)); } catch(e) {}
+}
+
+// ── Auto-reset: detect new period, archive old, wipe todos ────────────────
+function checkAndReset() {
+  const resets = [];
+  PERIODS.forEach(period => {
+    const currentKey = getPeriodKey(period);
+    const storedKey  = state.periodKeys[period];
+
+    if (storedKey && storedKey !== currentKey) {
+      // New period — snapshot completion of the old one
+      const todos = state.todos[period] || [];
+      const done  = todos.filter(t => t.done).length;
+      const total = todos.length;
+      const pct   = total === 0 ? null : Math.round((done / total) * 100);
+
+      state.history[period].push({ key: storedKey, pct });
+      // Keep only last N entries
+      if (state.history[period].length > CFG[period].histLen) {
+        state.history[period] = state.history[period].slice(-CFG[period].histLen);
+      }
+      state.todos[period] = [];
+      resets.push({ period, pct, total });
+    }
+    state.periodKeys[period] = currentKey;
+  });
+
+  if (resets.length) {
+    save();
+    showResetToast(resets);
+  }
+}
+
+function showResetToast(resets) {
+  const lines = resets.map(r => {
+    const pctStr = r.pct === null ? 'No tasks set' : `${r.pct}% completed`;
+    return `<span style="color:#fff">${CFG[r.period].label}:</span> ${pctStr}`;
+  }).join('<br>');
+
+  document.getElementById('toastContainer').innerHTML = `
+    <div class="toast">
+      <div class="toast-title">🎉 New Period!</div>
+      <div class="toast-body">
+        Saved to chart:<br>${lines}<br>
+        <span style="font-size:10px;color:rgba(255,255,255,0.3)">Fresh slate ready ✓</span>
+      </div>
+    </div>`;
+  setTimeout(() => { document.getElementById('toastContainer').innerHTML = ''; }, 5500);
+}
+
+// ── Time helpers ───────────────────────────────────────────────────────────
+function getTimeLeft(period) {
+  const now = new Date();
+  let end;
+  if (period==='daily')   { end=new Date(now); end.setHours(23,59,59,999); }
+  else if (period==='weekly')  { end=new Date(now); end.setDate(now.getDate()+(6-now.getDay())); end.setHours(23,59,59,999); }
+  else if (period==='monthly') { end=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59,999); }
+  else { end=new Date(now.getFullYear(),11,31,23,59,59,999); }
+  return Math.max(0, Math.floor((end - now) / 1000));
+}
+function getTimePct(period) {
+  const now = new Date();
+  let start, total;
+  if (period==='daily')   { start=new Date(now); start.setHours(0,0,0,0); total=86400; }
+  else if (period==='weekly')  { start=new Date(now); start.setDate(now.getDate()-now.getDay()); start.setHours(0,0,0,0); total=604800; }
+  else if (period==='monthly') { start=new Date(now.getFullYear(),now.getMonth(),1); total=30*86400; }
+  else { start=new Date(now.getFullYear(),0,1); total=365*86400; }
+  return Math.min(100, Math.round(((now-start)/1000/total)*100));
+}
+function formatTime(s) {
+  const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  if(d>0) return `${d}d ${h}h ${m}m`;
+  if(h>0) return `${h}h ${m}m ${sec}s`;
+  return `${m}m ${sec}s`;
+}
+
+// ── Friendly chart label from key ─────────────────────────────────────────
+function friendlyLabel(period, key) {
+  if (!key) return '—';
+  if (period==='daily') {
+    const [y,mo,d] = key.split('-').map(Number);
+    return ['Su','Mo','Tu','We','Th','Fr','Sa'][new Date(y,mo-1,d).getDay()];
+  }
+  if (period==='weekly') return key.split('-')[1]; // W42
+  if (period==='monthly') {
+    const mo = parseInt(key.split('-')[1]);
+    return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo-1];
+  }
+  return key; // year
+}
+
+// ── UI ─────────────────────────────────────────────────────────────────────
+function setAccent(color) {
+  document.documentElement.style.setProperty('--accent', color);
+  document.getElementById('glow').style.background =
+    `radial-gradient(circle, ${color}22 0%, transparent 70%)`;
+}
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function buildTabs() {
+  document.getElementById('tabs').innerHTML = PERIODS.map(p => `
+    <button class="tab ${p===activePeriod?'active':''}" onclick="setPeriod('${p}')">
+      ${CFG[p].label}
+    </button>`).join('');
+}
+function updateCountdown() {
+  const tl   = getTimeLeft(activePeriod);
+  const tp   = getTimePct(activePeriod);
+  const todos = state.todos[activePeriod] || [];
+  const done  = todos.filter(t=>t.done).length;
+  const total = todos.length;
+  const pct   = total===0 ? 0 : Math.round((done/total)*100);
+  const circ  = 2 * Math.PI * 42;
+  document.getElementById('timeValue').textContent   = formatTime(tl);
+  document.getElementById('timeElapsed').textContent = `${tp}% of period elapsed`;
+  document.getElementById('ringPct').textContent     = `${pct}%`;
+  document.getElementById('ringCircle').style.strokeDashoffset = circ-(pct/100)*circ;
+  document.getElementById('taskCount').textContent   = `${done} of ${total} tasks`;
+  document.getElementById('pctLabel').textContent    = `${pct}%`;
+  document.getElementById('progFill').style.width    = `${pct}%`;
+}
+function renderTodos() {
+  const todos = state.todos[activePeriod] || [];
+  const list  = document.getElementById('todoList');
+  if (!todos.length) {
+    list.innerHTML = `<div class="todo-empty">✨ Fresh slate!<br>Add your ${CFG[activePeriod].label.toLowerCase()} goals below.</div>`;
+    return;
+  }
+  list.innerHTML = todos.map(t => `
+    <div class="todo-item ${t.done?'done':''}">
+      <button class="check-btn" onclick="toggleTodo(${t.id})">${t.done?'✓':''}</button>
+      <span class="todo-text">${escHtml(t.text)}</span>
+      <button class="del-btn" onclick="deleteTodo(${t.id})">×</button>
+    </div>`).join('');
+}
+function renderChart() {
+  const cfg   = CFG[activePeriod];
+  const hist  = state.history[activePeriod] || [];
+  const todos = state.todos[activePeriod] || [];
+  const done  = todos.filter(t=>t.done).length;
+  const total = todos.length;
+  const curPct = total===0 ? null : Math.round((done/total)*100);
+  const curKey = getPeriodKey(activePeriod);
+
+  // Combine history + current period
+  const entries = [...hist, { key: curKey, pct: curPct, current: true }]
+    .slice(-cfg.histLen);
+
+  document.getElementById('chartTitle').textContent    = `${cfg.label} Completion History`;
+  document.getElementById('chartSubtitle').textContent = `Showing last ${entries.length} ${cfg.label.toLowerCase()} periods`;
+
+  document.getElementById('barChart').innerHTML = entries.map(e => {
+    const hasPct = e.pct !== null && e.pct !== undefined;
+    const lbl    = friendlyLabel(activePeriod, e.key);
+    return `
+      <div class="bar-col">
+        <div class="bar-pct">${hasPct ? e.pct+'%' : ''}</div>
+        <div class="bar-inner">
+          <div class="bar-bg"></div>
+          <div class="bar-fill" style="height:${hasPct?e.pct:0}%; background:${cfg.color};
+            ${e.current ? `box-shadow:0 0 10px ${cfg.color}88;` : ''}"></div>
+        </div>
+        <div class="bar-label ${e.current?'current':''}">${lbl}</div>
+      </div>`;
+  }).join('');
+
+  const tp  = getTimePct(activePeriod);
+  const pastPcts = hist.filter(h=>h.pct!==null).map(h=>h.pct);
+  const avg = pastPcts.length
+    ? Math.round(pastPcts.reduce((a,b)=>a+b,0)/pastPcts.length)
+    : null;
+  const best = pastPcts.length ? Math.max(...pastPcts) : null;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-box">
+      <div class="stat-val">${curPct!==null?curPct+'%':'—'}</div>
+      <div class="stat-lbl">Now</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val">${avg!==null?avg+'%':'—'}</div>
+      <div class="stat-lbl">Avg</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-val">${best!==null?best+'%':'—'}</div>
+      <div class="stat-lbl">Best</div>
+    </div>`;
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────
+function setPeriod(p) { activePeriod=p; setAccent(CFG[p].color); buildTabs(); renderAll(); }
+function setView(v) {
+  activeView=v;
+  document.getElementById('tasksView').style.display = v==='tasks'?'block':'none';
+  document.getElementById('chartView').style.display = v==='chart'?'block':'none';
+  document.getElementById('btnTasks').classList.toggle('active', v==='tasks');
+  document.getElementById('btnChart').classList.toggle('active', v==='chart');
+  if (v==='chart') renderChart();
+}
+function addTodo() {
+  const inp = document.getElementById('todoInput');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  state.todos[activePeriod].push({ id:Date.now(), text:txt, done:false });
+  save(); inp.value=''; renderAll();
+}
+function toggleTodo(id) {
+  state.todos[activePeriod] = state.todos[activePeriod].map(t=>t.id===id?{...t,done:!t.done}:t);
+  save(); renderAll();
+}
+function deleteTodo(id) {
+  state.todos[activePeriod] = state.todos[activePeriod].filter(t=>t.id!==id);
+  save(); renderAll();
+}
+function renderAll() { updateCountdown(); renderTodos(); if(activeView==='chart') renderChart(); }
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('todoInput').addEventListener('keydown', e => { if(e.key==='Enter') addTodo(); });
+  load();
+  checkAndReset();   // ← detects new day/week/month/year, archives old %, clears tasks
+  setAccent(CFG[activePeriod].color);
+  buildTabs();
+  renderAll();
+  setInterval(updateCountdown, 1000);
+});
+</script>
+</body>
+</html>
